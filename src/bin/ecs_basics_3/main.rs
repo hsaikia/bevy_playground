@@ -7,6 +7,9 @@ const BLINK_COLOR_INTENSITY: f32 = 5.0;
 const BLINK_DURATION: f32 = 0.3;
 const SHOOTING_INTERVAL: f32 = 2.0;
 const SPEED_LASER: f32 = 300.0;
+const PLAYER_ACCELERATION: f32 = 1000.0;
+const PLAYER_MAX_SPEED: f32 = 200.0;
+const PLAYER_DRAG: f32 = 0.9;
 const LASER_BOUND: f32 = 1000.0;
 const HIT_DAMAGE: f32 = 1.;
 const SCALE: f32 = 1.;
@@ -52,7 +55,10 @@ impl Default for ShootingTimer {
 }
 
 #[derive(Component)]
-struct Speed(f32);
+struct Speed(Vec2);
+
+#[derive(Component)]
+struct Acceleration(Vec2);
 
 fn main() {
     App::new()
@@ -67,6 +73,8 @@ fn main() {
                 handle_collisions,
                 handle_blinking,
                 handle_player_orientation,
+                handle_acceleration,
+                handle_player_movement,
             ),
         )
         .run();
@@ -91,14 +99,19 @@ struct Player;
 
 fn player(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_PLAYER);
-    (Player, sprite(image, LEFT, SCALE, 0.))
+    (
+        Player,
+        Acceleration(Vec2::ZERO),
+        Speed(Vec2::ZERO),
+        sprite(image, LEFT, SCALE, 0.),
+    )
 }
 
 fn enemy(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_ENEMY);
     (
         sprite(image, RIGHT, SCALE, PI),
-        CircularCollider(0.5),
+        CircularCollider(10.0),
         Health(1000.),
     )
 }
@@ -112,10 +125,49 @@ fn laser(
     let angle = direction.y.atan2(direction.x);
     (
         sprite(image, transform.translation, SCALE, angle),
-        Speed(SPEED_LASER),
-        CircularCollider(0.5),
+        Speed(SPEED_LASER * transform.local_x().xy()),
+        CircularCollider(10.0),
         Health(0.01),
     )
+}
+
+fn handle_acceleration(
+    mut query: Query<(&mut Acceleration, &mut Speed)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+    for (mut acceleration, mut speed) in query.iter_mut() {
+        let old_speed = speed.0;
+        speed.0 -= PLAYER_DRAG * old_speed * dt;
+        speed.0 += acceleration.0 * dt;
+        if speed.0.length_squared() > PLAYER_MAX_SPEED * PLAYER_MAX_SPEED {
+            speed.0 = speed.0.normalize() * PLAYER_MAX_SPEED;
+        }
+        acceleration.0 = Vec2::ZERO;
+    }
+}
+
+fn handle_player_movement(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut q_player: Query<&mut Acceleration, With<Player>>,
+) {
+    let mut acc = q_player.single_mut().unwrap();
+    let mut cumulative_acc = Vec2::ZERO;
+    if keys.pressed(KeyCode::KeyW) {
+        cumulative_acc.y = 1.0;
+    }
+    if keys.pressed(KeyCode::KeyS) {
+        cumulative_acc.y = -1.0;
+    }
+    if keys.pressed(KeyCode::KeyA) {
+        cumulative_acc.x = -1.0;
+    }
+    if keys.pressed(KeyCode::KeyD) {
+        cumulative_acc.x = 1.0;
+    }
+    if cumulative_acc.length() > 0. {
+        acc.0 = cumulative_acc.normalize() * PLAYER_ACCELERATION;
+    }
 }
 
 fn handle_player_orientation(
@@ -163,11 +215,10 @@ fn move_entities(
 ) {
     let dt = time.delta_secs();
     for (entity, mut transform, speed) in query.iter_mut() {
-        let forward = transform.local_x();
-        transform.translation += speed.0 * forward * dt;
-        if transform.translation.distance(LEFT) > LASER_BOUND {
-            commands.entity(entity).despawn();
-        }
+        transform.translation += speed.0.extend(0.) * dt;
+        // if transform.translation.distance(LEFT) > LASER_BOUND {
+        //     commands.entity(entity).despawn();
+        // }
     }
 }
 
