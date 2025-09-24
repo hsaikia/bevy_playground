@@ -75,6 +75,7 @@ fn main() {
                 handle_player_orientation,
                 handle_acceleration,
                 handle_player_movement,
+                despawn_lasers,
             ),
         )
         .run();
@@ -96,6 +97,9 @@ fn sprite(
 
 #[derive(Component)]
 struct Player;
+
+#[derive(Component)]
+struct Laser;
 
 fn player(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_PLAYER);
@@ -124,6 +128,7 @@ fn laser(
     let direction = transform.right();
     let angle = direction.y.atan2(direction.x);
     (
+        Laser,
         sprite(image, transform.translation, SCALE, angle),
         Speed(SPEED_LASER * transform.local_x().xy()),
         CircularCollider(10.0),
@@ -208,17 +213,26 @@ fn player_shooting(
     timer.0.tick(time.delta());
 }
 
-fn move_entities(
+fn despawn_lasers(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Transform, &Speed)>,
-    time: Res<Time>,
+    mut query: Query<(Entity, &Transform), With<Laser>>,
+    player: Query<&Transform, With<Player>>,
 ) {
+    for (entity, transform) in query.iter_mut() {
+        if transform
+            .translation
+            .distance(player.single().unwrap().translation)
+            > LASER_BOUND
+        {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn move_entities(mut query: Query<(&mut Transform, &Speed)>, time: Res<Time>) {
     let dt = time.delta_secs();
-    for (entity, mut transform, speed) in query.iter_mut() {
+    for (mut transform, speed) in query.iter_mut() {
         transform.translation += speed.0.extend(0.) * dt;
-        // if transform.translation.distance(LEFT) > LASER_BOUND {
-        //     commands.entity(entity).despawn();
-        // }
     }
 }
 
