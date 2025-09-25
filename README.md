@@ -15,6 +15,6 @@ ECS tutorial on Timers, Adding/Removing components, Collision Detection and Desp
 
 ## ECS Basics 3
 
-ECS tutorial on Kinematics (Acceleration and Drag), 2d Character Movement using Keyboard input and character shooting using Mouse input.
+ECS tutorial on Kinematics (Acceleration and Drag), 2d Character Movement using Keyboard/Mouse inputs, and character shooting using Mouse input.
 
 ![ecs3](screenshots/ecs_basics_3.png)
