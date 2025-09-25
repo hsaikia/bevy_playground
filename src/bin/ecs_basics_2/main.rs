@@ -1,7 +1,9 @@
 use std::f32::consts::PI;
 
 use bevy::prelude::*;
-use bevy_playground::plugins::utils::UtilsPlugin;
+use bevy_playground::{
+    library::sprite::sprite_bundle_2d, plugins::utils::UtilsPlugin,
+};
 
 const BLINK_COLOR_INTENSITY: f32 = 5.0;
 const BLINK_DURATION: f32 = 0.3;
@@ -13,8 +15,8 @@ const SCALE: f32 = 1.;
 const IMAGE_PATH_PLAYER: &str = "images/playerShip2_blue.png";
 const IMAGE_PATH_ENEMY: &str = "images/ufoRed.png";
 const IMAGE_PATH_LASER: &str = "images/laserBlue01.png";
-const LEFT: Vec3 = Vec3::new(-300., 0.0, 0.);
-const RIGHT: Vec3 = Vec3::new(300., 0.0, 0.);
+const LEFT: Vec2 = Vec2::new(-300., 0.0);
+const RIGHT: Vec2 = Vec2::new(300., 0.0);
 
 #[derive(Component)]
 struct CircularCollider(f32);
@@ -71,29 +73,15 @@ fn main() {
         .run();
 }
 
-fn sprite(
-    image: Handle<Image>,
-    translation: Vec3,
-    scale_xyz: f32,
-    heading_yaw: f32,
-) -> impl Bundle {
-    (
-        Sprite::from_image(image),
-        Transform::from_translation(translation)
-            .with_rotation(Quat::from_rotation_z(heading_yaw))
-            .with_scale(Vec3::splat(scale_xyz)),
-    )
-}
-
 fn player(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_PLAYER);
-    sprite(image, LEFT, SCALE, 0.)
+    sprite_bundle_2d(image, LEFT, SCALE, 0.)
 }
 
 fn enemy(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_ENEMY);
     (
-        sprite(image, RIGHT, SCALE, PI),
+        sprite_bundle_2d(image, RIGHT, SCALE, PI),
         CircularCollider(0.5),
         Health(1000.),
     )
@@ -102,7 +90,7 @@ fn enemy(asset_server: &Res<AssetServer>) -> impl Bundle {
 fn laser(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_LASER);
     (
-        sprite(image, LEFT, SCALE, 0.),
+        sprite_bundle_2d(image, LEFT, SCALE, 0.),
         Speed(SPEED_LASER),
         CircularCollider(0.5),
         Health(0.01),
@@ -130,7 +118,7 @@ fn move_entities(
     for (entity, mut transform, speed) in query.iter_mut() {
         let forward = transform.local_x();
         transform.translation += speed.0 * forward * dt;
-        if transform.translation.distance(LEFT) > LASER_BOUND {
+        if transform.translation.xy().distance(LEFT) > LASER_BOUND {
             commands.entity(entity).despawn();
         }
     }

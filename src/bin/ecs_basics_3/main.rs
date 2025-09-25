@@ -1,23 +1,25 @@
 use std::f32::consts::PI;
 
 use bevy::{prelude::*, window::PrimaryWindow};
-use bevy_playground::plugins::utils::UtilsPlugin;
+use bevy_playground::{
+    library::sprite::sprite_bundle_2d, plugins::utils::UtilsPlugin,
+};
 
 const BLINK_COLOR_INTENSITY: f32 = 5.0;
 const BLINK_DURATION: f32 = 0.3;
-const SHOOTING_INTERVAL: f32 = 2.0;
 const SPEED_LASER: f32 = 300.0;
 const PLAYER_ACCELERATION: f32 = 1000.0;
-const PLAYER_MAX_SPEED: f32 = 200.0;
-const PLAYER_DRAG: f32 = 0.9;
+const PLAYER_DRAG: f32 = 0.95;
 const LASER_BOUND: f32 = 1000.0;
-const HIT_DAMAGE: f32 = 1.;
+const COLLISION_RADIUS: f32 = 10.0;
+const LASER_DAMAGE: f32 = 10.;
+const ENEMY_SHIP_HEALTH: f32 = 100.;
 const SCALE: f32 = 1.;
 const IMAGE_PATH_PLAYER: &str = "images/playerShip2_blue.png";
 const IMAGE_PATH_ENEMY: &str = "images/ufoRed.png";
 const IMAGE_PATH_LASER: &str = "images/laserBlue01.png";
-const LEFT: Vec3 = Vec3::new(-300., 0.0, 0.);
-const RIGHT: Vec3 = Vec3::new(300., 0.0, 0.);
+const LEFT: Vec2 = Vec2::new(-300., 0.0);
+const RIGHT: Vec2 = Vec2::new(300., 0.0);
 
 #[derive(Component)]
 struct CircularCollider(f32);
@@ -44,16 +46,6 @@ impl Default for Blink {
         Self(Timer::from_seconds(BLINK_DURATION, TimerMode::Once))
     }
 }
-
-#[derive(Resource)]
-struct ShootingTimer(Timer);
-
-impl Default for ShootingTimer {
-    fn default() -> Self {
-        Self(Timer::from_seconds(SHOOTING_INTERVAL, TimerMode::Repeating))
-    }
-}
-
 #[derive(Component)]
 struct Speed(Vec2);
 
@@ -62,7 +54,6 @@ struct Acceleration(Vec2);
 
 fn main() {
     App::new()
-        .init_resource::<ShootingTimer>()
         .add_plugins((DefaultPlugins, UtilsPlugin))
         .add_systems(Startup, setup)
         .add_systems(
@@ -81,20 +72,6 @@ fn main() {
         .run();
 }
 
-fn sprite(
-    image: Handle<Image>,
-    translation: Vec3,
-    scale_xyz: f32,
-    heading_yaw: f32,
-) -> impl Bundle {
-    (
-        Sprite::from_image(image),
-        Transform::from_translation(translation)
-            .with_rotation(Quat::from_rotation_z(heading_yaw))
-            .with_scale(Vec3::splat(scale_xyz)),
-    )
-}
-
 #[derive(Component)]
 struct Player;
 
@@ -107,16 +84,16 @@ fn player(asset_server: &Res<AssetServer>) -> impl Bundle {
         Player,
         Acceleration(Vec2::ZERO),
         Speed(Vec2::ZERO),
-        sprite(image, LEFT, SCALE, 0.),
+        sprite_bundle_2d(image, LEFT, SCALE, 0.),
     )
 }
 
 fn enemy(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_ENEMY);
     (
-        sprite(image, RIGHT, SCALE, PI),
-        CircularCollider(10.0),
-        Health(1000.),
+        sprite_bundle_2d(image, RIGHT, SCALE, PI),
+        CircularCollider(COLLISION_RADIUS),
+        Health(ENEMY_SHIP_HEALTH),
     )
 }
 
@@ -126,13 +103,13 @@ fn laser(
 ) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_LASER);
     let direction = transform.right();
-    let angle = direction.y.atan2(direction.x);
+    let yaw = direction.y.atan2(direction.x);
     (
         Laser,
-        sprite(image, transform.translation, SCALE, angle),
+        sprite_bundle_2d(image, transform.translation.xy(), SCALE, yaw),
         Speed(SPEED_LASER * transform.local_x().xy()),
-        CircularCollider(10.0),
-        Health(0.01),
+        CircularCollider(COLLISION_RADIUS),
+        Health(LASER_DAMAGE),
     )
 }
 
@@ -145,9 +122,6 @@ fn handle_acceleration(
         let old_speed = speed.0;
         speed.0 -= PLAYER_DRAG * old_speed * dt;
         speed.0 += acceleration.0 * dt;
-        if speed.0.length_squared() > PLAYER_MAX_SPEED * PLAYER_MAX_SPEED {
-            speed.0 = speed.0.normalize() * PLAYER_MAX_SPEED;
-        }
         acceleration.0 = Vec2::ZERO;
     }
 }
@@ -156,61 +130,60 @@ fn handle_player_movement(
     keys: Res<ButtonInput<KeyCode>>,
     mut q_player: Query<&mut Acceleration, With<Player>>,
 ) {
-    let mut acc = q_player.single_mut().unwrap();
-    let mut cumulative_acc = Vec2::ZERO;
-    if keys.pressed(KeyCode::KeyW) {
-        cumulative_acc.y = 1.0;
-    }
-    if keys.pressed(KeyCode::KeyS) {
-        cumulative_acc.y = -1.0;
-    }
-    if keys.pressed(KeyCode::KeyA) {
-        cumulative_acc.x = -1.0;
-    }
-    if keys.pressed(KeyCode::KeyD) {
-        cumulative_acc.x = 1.0;
-    }
-    if cumulative_acc.length() > 0. {
-        acc.0 = cumulative_acc.normalize() * PLAYER_ACCELERATION;
+    if let Ok(mut acc) = q_player.single_mut() {
+        let mut cumulative_acc = Vec2::ZERO;
+        if keys.pressed(KeyCode::KeyW) {
+            cumulative_acc.y = 1.0;
+        }
+        if keys.pressed(KeyCode::KeyS) {
+            cumulative_acc.y = -1.0;
+        }
+        if keys.pressed(KeyCode::KeyA) {
+            cumulative_acc.x = -1.0;
+        }
+        if keys.pressed(KeyCode::KeyD) {
+            cumulative_acc.x = 1.0;
+        }
+        if cumulative_acc.length() > 0. {
+            acc.0 = cumulative_acc.normalize() * PLAYER_ACCELERATION;
+        }
     }
 }
 
 fn handle_player_orientation(
     q_window: Query<&Window, With<PrimaryWindow>>,
-    mut q_player_tr: Query<&mut Transform, With<Player>>,
     q_camera: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
+    mut q_player_tr: Query<&mut Transform, With<Player>>,
 ) {
-    if q_camera.is_empty() || q_player_tr.is_empty() {
-        return;
-    }
-    let (camera, camera_transform) = q_camera.single().unwrap();
-    if let Some(mouse_pos) = q_window
-        .single()
-        .unwrap()
-        .cursor_position()
-        .and_then(|cursor| {
-            camera.viewport_to_world_2d(camera_transform, cursor).ok()
-        })
-    {
-        let mut player_tr = q_player_tr.single_mut().unwrap();
-        let target_heading =
-            (mouse_pos - player_tr.translation.truncate()).normalize();
-        player_tr.rotation =
-            Quat::from_rotation_z(target_heading.y.atan2(target_heading.x));
+    if let Ok((camera, camera_transform)) = q_camera.single() {
+        if let Some(mouse_pos) = q_window
+            .single()
+            .unwrap()
+            .cursor_position()
+            .and_then(|cursor| {
+                camera.viewport_to_world_2d(camera_transform, cursor).ok()
+            })
+        {
+            if let Ok(mut player_tr) = q_player_tr.single_mut() {
+                let target_heading =
+                    (mouse_pos - player_tr.translation.truncate()).normalize();
+                player_tr.rotation = Quat::from_rotation_z(
+                    target_heading.y.atan2(target_heading.x),
+                );
+            }
+        }
     }
 }
 
 fn player_shooting(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut timer: ResMut<ShootingTimer>,
-    time: Res<Time>,
     player_tr: Query<&Transform, With<Player>>,
+    buttons: Res<ButtonInput<MouseButton>>,
 ) {
-    if timer.0.finished() {
+    if buttons.just_released(MouseButton::Left) {
         commands.spawn(laser(&asset_server, player_tr.single().unwrap()));
     }
-    timer.0.tick(time.delta());
 }
 
 fn despawn_lasers(
@@ -241,8 +214,11 @@ fn handle_collisions(
     mut query: Query<(Entity, &mut CircularCollider, &mut Health, &Transform)>,
 ) {
     let mut damages = vec![0.; query.iter().len()];
-    for (i, (_, collider_i, _, transform_i)) in query.iter().enumerate() {
-        for (j, (_, collider_j, _, transform_j)) in query.iter().enumerate() {
+    for (i, (_, collider_i, health_i, transform_i)) in query.iter().enumerate()
+    {
+        for (j, (_, collider_j, health_j, transform_j)) in
+            query.iter().enumerate()
+        {
             if i < j
                 && collider_i.collides_with(
                     &transform_i.translation,
@@ -250,8 +226,9 @@ fn handle_collisions(
                     &transform_j.translation,
                 )
             {
-                damages[i] += HIT_DAMAGE;
-                damages[j] += HIT_DAMAGE;
+                let damage = f32::min(health_i.0, health_j.0);
+                damages[i] += damage;
+                damages[j] += damage;
             }
         }
     }
@@ -259,12 +236,15 @@ fn handle_collisions(
     for ((entity, _, mut health_i, _), damage) in
         query.iter_mut().zip(damages.iter())
     {
-        health_i.0 -= damage;
+        if *damage > 0. {
+            //println!("Health {} Damage {}", health_i.0, damage);
+            health_i.0 -= damage;
 
-        if health_i.0 < 0. {
-            commands.entity(entity).despawn();
-        } else if *damage > 0. {
-            commands.entity(entity).insert(Blink::default());
+            if health_i.0 <= 0. {
+                commands.entity(entity).despawn();
+            } else {
+                commands.entity(entity).insert(Blink::default());
+            }
         }
     }
 }
