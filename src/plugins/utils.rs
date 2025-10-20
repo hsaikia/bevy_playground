@@ -3,18 +3,18 @@ use bevy::{
     render::view::screenshot::{save_to_disk, Screenshot},
 };
 
-#[derive(Event)]
-pub struct GenerateNewEvent;
+#[derive(Message)]
+pub struct GenerateNewMessage;
 
-#[derive(Event)]
-pub struct SaveEvent;
+#[derive(Message)]
+pub struct SaveMessage;
 
 pub struct UtilsPlugin;
 
 impl Plugin for UtilsPlugin {
     fn build(&self, app: &mut bevy::prelude::App) {
-        app.add_event::<GenerateNewEvent>()
-            .add_event::<SaveEvent>()
+        app.add_message::<GenerateNewMessage>()
+            .add_message::<SaveMessage>()
             .add_systems(Update, handle_keyboard);
     }
 }
@@ -22,9 +22,9 @@ impl Plugin for UtilsPlugin {
 fn handle_keyboard(
     mut commands: Commands,
     input: Res<ButtonInput<KeyCode>>,
-    mut exit: EventWriter<AppExit>,
-    mut generate_new: EventWriter<GenerateNewEvent>,
-    mut save_new: EventWriter<SaveEvent>,
+    mut exit: MessageWriter<AppExit>,
+    mut generate_new: MessageWriter<GenerateNewMessage>,
+    mut save_new: MessageWriter<SaveMessage>,
     mut counter: Local<u32>,
 ) {
     if input.just_pressed(KeyCode::KeyP) {
@@ -35,12 +35,12 @@ fn handle_keyboard(
             .observe(save_to_disk(path));
     }
     if input.just_pressed(KeyCode::KeyL) {
-        save_new.write(SaveEvent);
+        save_new.write(SaveMessage);
     }
     if input.just_pressed(KeyCode::Escape) {
         exit.write(AppExit::Success);
     }
     if input.just_pressed(KeyCode::Space) {
-        generate_new.write(GenerateNewEvent);
+        generate_new.write(GenerateNewMessage);
     }
 }

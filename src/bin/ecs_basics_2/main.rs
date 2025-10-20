@@ -103,7 +103,7 @@ fn player_shooting(
     mut timer: ResMut<ShootingTimer>,
     time: Res<Time>,
 ) {
-    if timer.0.finished() {
+    if timer.0.is_finished() {
         commands.spawn(laser(&asset_server));
     }
     timer.0.tick(time.delta());
@@ -163,7 +163,7 @@ fn handle_blinking(
     time: Res<Time>,
 ) {
     for (entity, mut blink, mut sprite) in query.iter_mut() {
-        if blink.0.finished() {
+        if blink.0.is_finished() {
             sprite.color = Color::WHITE;
             commands.entity(entity).remove::<Blink>();
         } else {

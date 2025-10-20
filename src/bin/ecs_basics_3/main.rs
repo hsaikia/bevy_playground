@@ -255,7 +255,7 @@ fn handle_blinking(
     time: Res<Time>,
 ) {
     for (entity, mut blink, mut sprite) in query.iter_mut() {
-        if blink.0.finished() {
+        if blink.0.is_finished() {
             sprite.color = Color::WHITE;
             commands.entity(entity).remove::<Blink>();
         } else {
