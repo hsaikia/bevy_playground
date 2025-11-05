@@ -17,6 +17,9 @@ const IMAGE_PATH_ENEMY: &str = "images/ufoRed.png";
 const IMAGE_PATH_LASER: &str = "images/laserBlue01.png";
 const LEFT: Vec2 = Vec2::new(-300., 0.0);
 const RIGHT: Vec2 = Vec2::new(300., 0.0);
+const ALLOW_DEBUGGING: bool = true;
+const LASER_COLLIDER_RADIUS: f32 = 10.0;
+const ENEMY_COLLIDER_RADIUS: f32 = 20.0;
 
 #[derive(Component)]
 struct CircularCollider(f32);
@@ -68,6 +71,7 @@ fn main() {
                 move_entities,
                 handle_collisions,
                 handle_blinking,
+                handle_debuging,
             ),
         )
         .run();
@@ -75,14 +79,17 @@ fn main() {
 
 fn player(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_PLAYER);
-    sprite_bundle_2d(image, LEFT, SCALE, 0.)
+    (
+        sprite_bundle_2d(image, LEFT, SCALE, 0.),
+        Health(100.),
+    )
 }
 
 fn enemy(asset_server: &Res<AssetServer>) -> impl Bundle {
     let image = asset_server.load(IMAGE_PATH_ENEMY);
     (
         sprite_bundle_2d(image, RIGHT, SCALE, PI),
-        CircularCollider(0.5),
+        CircularCollider(ENEMY_COLLIDER_RADIUS),
         Health(1000.),
     )
 }
@@ -92,7 +99,7 @@ fn laser(asset_server: &Res<AssetServer>) -> impl Bundle {
     (
         sprite_bundle_2d(image, LEFT, SCALE, 0.),
         Speed(SPEED_LASER),
-        CircularCollider(0.5),
+        CircularCollider(LASER_COLLIDER_RADIUS),
         Health(0.01),
     )
 }
@@ -153,6 +160,21 @@ fn handle_collisions(
             commands.entity(entity).despawn();
         } else if *damage > 0. {
             commands.entity(entity).insert(Blink::default());
+        }
+    }
+}
+
+fn handle_debuging(
+    mut gizmos: Gizmos,
+    mut query: Query<(&Transform, &mut CircularCollider)>,
+) {
+    if ALLOW_DEBUGGING {
+        for (transform, collider) in query.iter_mut() {
+            gizmos.circle_2d(
+                Isometry2d::from_translation(transform.translation.truncate()),
+                collider.0,
+                Srgba::RED,
+            );
         }
     }
 }
