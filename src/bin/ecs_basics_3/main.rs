@@ -47,7 +47,7 @@ impl Default for Blink {
     }
 }
 #[derive(Component)]
-struct Speed(Vec2);
+struct Velocity(Vec2);
 
 #[derive(Component)]
 struct Acceleration(Vec2);
@@ -83,7 +83,7 @@ fn player(asset_server: &Res<AssetServer>) -> impl Bundle {
     (
         Player,
         Acceleration(Vec2::ZERO),
-        Speed(Vec2::ZERO),
+        Velocity(Vec2::ZERO),
         sprite_bundle_2d(image, LEFT, SCALE, 0.),
     )
 }
@@ -107,21 +107,21 @@ fn laser(
     (
         Laser,
         sprite_bundle_2d(image, transform.translation.xy(), SCALE, yaw),
-        Speed(SPEED_LASER * transform.local_x().xy()),
+        Velocity(SPEED_LASER * transform.local_x().xy()),
         CircularCollider(COLLISION_RADIUS),
         Health(LASER_DAMAGE),
     )
 }
 
 fn handle_acceleration(
-    mut query: Query<(&mut Acceleration, &mut Speed)>,
+    mut query: Query<(&mut Acceleration, &mut Velocity)>,
     time: Res<Time>,
 ) {
     let dt = time.delta_secs();
-    for (mut acceleration, mut speed) in query.iter_mut() {
-        let old_speed = speed.0;
-        speed.0 -= PLAYER_DRAG * old_speed * dt;
-        speed.0 += acceleration.0 * dt;
+    for (mut acceleration, mut velocity) in query.iter_mut() {
+        let old_velocity = velocity.0;
+        velocity.0 -= PLAYER_DRAG * old_velocity * dt;
+        velocity.0 += acceleration.0 * dt;
         acceleration.0 = Vec2::ZERO;
     }
 }
@@ -202,10 +202,13 @@ fn despawn_lasers(
     }
 }
 
-fn move_entities(mut query: Query<(&mut Transform, &Speed)>, time: Res<Time>) {
+fn move_entities(
+    mut query: Query<(&mut Transform, &Velocity)>,
+    time: Res<Time>,
+) {
     let dt = time.delta_secs();
-    for (mut transform, speed) in query.iter_mut() {
-        transform.translation += speed.0.extend(0.) * dt;
+    for (mut transform, velocity) in query.iter_mut() {
+        transform.translation += velocity.0.extend(0.) * dt;
     }
 }
 
